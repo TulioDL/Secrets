@@ -4,8 +4,11 @@ const bodyParser = require('body-parser');
 const express = require('express');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
-const encrypt = require('mongoose-encryption');
+// const encrypt = require('mongoose-encryption'); //dotenv encryption
+// const md5 = require('md5'); //hash encryption
+const bcrypt = require('bcrypt');
 
+const saltRounds = 10;
 const app = express();
 
 app.use(express.static("public"));
@@ -21,7 +24,7 @@ const userSchema = new mongoose.Schema({
 });
 
 
-userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptedFields: ['password']});
+// userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptedFields: ['password']}); //dotenv encryption
 
 const User = new mongoose.model("User", userSchema);
 
@@ -41,23 +44,31 @@ app.get("/login", function (req, res) {
 });
 
 app.post("/register", function (req, res) {
-    const newUser = new User ({
-        email: req.body.username,
-        password: req.body.password
-    });
 
-    newUser.save(function (err) {
-        if(err){
-            console.log(err);
-        }else{
-            res.render("secrets")
-        }
+    bcrypt.genSalt(saltRounds, function(err, salt) {
+        bcrypt.hash(req.body.password, salt, function(err, hash) {
+            const newUser = new User ({
+                email: req.body.username,
+                //password: md5(req.body.password) //hashing the password
+                password: hash   //salted and hashing with bcrypt
+            });
+            newUser.save(function (err) {
+                if(err){
+                    console.log(err);
+                }else{
+                    res.render("secrets")
+                }
+            });
+            if (err) console.log(err);
+        });
+        if (err) console.log(err);
     });
 });
 
 app.post("/login", function (req, res) {
     const username = req.body.username;
-    const password = req.body.password;
+    //const password = md5(req.body.password); //hashing the input to compare
+    const password = req.body.password; //salted and hashed (bcrypt)
 
     User.findOne({email: username}, function (err, foundUser) {
         
@@ -65,9 +76,12 @@ app.post("/login", function (req, res) {
             console.log(err);
         }else{
             if (foundUser){
-                if (foundUser.password === password){
-                    res.render("secrets");
-                };
+                bcrypt.compare(password, foundUser.password, function(err, result) {
+                    // result == true
+                    if (result===true) res.render("secrets");
+                    if (err) console.log(err);
+                });
+
             };
         };
     });
