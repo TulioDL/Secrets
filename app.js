@@ -37,7 +37,8 @@ const userSchema = new mongoose.Schema({
 
     email: String,
     password: String,
-    googleId: String    //added googleId so de DB doesn't create new users each time someone enters with google (findOrCreate)
+    googleId: String,    //added googleId so de DB doesn't create new users each time someone enters with google (findOrCreate)
+    secret: String
 });
 
 userSchema.plugin(passportLocalMongoose); //This is going to salt and hash the passport
@@ -104,11 +105,21 @@ app.get("/login", function (req, res) {
 });
 
 app.get("/secrets", function (req, res) {
-    if (req.isAuthenticated()){
-        res.render("secrets");
-    } else {
-        res.redirect("/login");
-    }
+    // if (req.isAuthenticated()){   //we donn't want to authenticate no more to enter the secret page, 
+    //     res.render("secrets");    //we just want it to show all secrets posted
+    // } else {
+    //     res.redirect("/login");
+    // }
+
+    User.find({"secret": {$ne:null}}, function (err, foundUsers) {  //look for every user with non empty secret value (ne=nonequeal)
+        if (err){
+            console.log(err);
+        } else {
+            if(foundUsers){
+                res.render("secrets", {usersWithSecrets: foundUsers});
+            }
+        }
+    });
 });
 
 app.get("/logout", function (req, res) {
@@ -117,6 +128,34 @@ app.get("/logout", function (req, res) {
 });
 
 //when u update the server, the cookie is deleted
+
+app.get("/submit", function (req, res) {
+    if (req.isAuthenticated()){
+        res.render("submit");
+    } else {
+        res.redirect("/login");
+    }
+});
+
+app.post("/submit", function (req, res) {
+    
+    const submittedSecret = req.body.secret;
+
+    console.log(req.user.id);
+
+    User. findById(req.user.id, function (err, foundUser) {
+        if(err){
+            console.log(err);
+        }else{
+            if(foundUser){
+                foundUser.secret = submittedSecret;
+                foundUser.save(function () {
+                    res.redirect("/secrets"); //after submit and save the secret, er redirect to the previous page
+                })
+            }
+        }
+    })
+})
 
 app.post("/register", function (req, res) {
 
